@@ -24,9 +24,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.UUID;
@@ -40,6 +42,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     TextView textView_DeviceAddress;
     TextView textView_Status;
     ImageView imageView1;
+    Button buttonSatuei;
     ArrayList<BluetoothDevice> mBluetoothDeviceList;
     ArrayList<String> mDeviceNameList;
     ArrayAdapter<String> mArrayAdapter;
@@ -122,6 +125,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         });
 
         Button bi = findViewById(R.id.Button_Image);
+        buttonSatuei = bi;
         bi.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -248,35 +252,48 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
 
         void sendGetImageCommand(){
-            try {
-                if (outputStream != null) {
-                    // Send Command
-                    String command = "GetImage";
-                    outputStream.write(command.getBytes());
-                    byte[] b = new byte[1024];
-                    int incomingBytes = inputStream.read(b);
-                    if(incomingBytes != 0) {
-                        setStatusTextView("テスト成功");
-                        // サーバからビットマップイメージが送られてきたら変換して表示
-                        try {
-                            Bitmap bitmap = BitmapFactory.decodeByteArray(b,0,incomingBytes);
-                            imageView1.setImageBitmap(bitmap);
-                        } catch (Exception e) {
-                            e.printStackTrace();
+            if (outputStream != null) {
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            setSatueiButtonEnable(false);
+                            try {
+                                // Send Command
+                                setStatusTextView("撮影中");
+                                String command = "GetImage";
+                                outputStream.write(command.getBytes());
+                                // 受け取れる画像サイズ
+                                byte[] bytes = new byte[1024 * 1024 * 10];
+                                int incomingBytes;
+                                incomingBytes = inputStream.read(bytes);
+                                if (incomingBytes == 4) {
+                                    outputStream.write(command.getBytes());
+                                    int num = ByteBuffer.wrap(bytes).getInt();
+                                    int rcvCnt = 0;
+                                    // サーバからJPGが送られてきたら変換して表示
+                                    try {
+                                        // 読み込みバッファはとりあえず200kb
+                                        byte[] tmpBytes = new byte[1024 * 200];
+                                        while (num > rcvCnt) {
+                                            incomingBytes = inputStream.read(tmpBytes);
+                                            System.arraycopy(tmpBytes, 0, bytes, rcvCnt, incomingBytes);
+                                            rcvCnt += incomingBytes;
+                                        }
+                                        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, rcvCnt);
+                                        setJpgImageView(bitmap);
+                                        setStatusTextView("撮影完了");
+                                    } catch (Exception e) {
+                                        setStatusTextView("画像取得失敗");
+                                        e.printStackTrace();
+                                    }
+                                }
+                            } catch (IOException e) {
+                                setStatusTextView("撮影失敗");
+                                e.printStackTrace();
+                            }
+                            setSatueiButtonEnable(true);
                         }
-                        //imageView1.setImageResource(R.drawable.ic_launcher_background);
-                    }
-                }
-                //try {
-                //    android.content.res.Resources r = getResources();
-                //    Bitmap bitmap = BitmapFactory.decodeResource(r,R.drawable.sankaku);
-                //    imageView1.setImageBitmap(bitmap);
-                //} catch (Exception e) {
-                //    e.printStackTrace();
-                //}
-
-            } catch (IOException e) {
-                Log.d(TAG, e.getMessage());
+                    }).start();
             }
         }
 
@@ -288,5 +305,24 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                 }
             });
         }
+
+        private void setJpgImageView(final Bitmap bitmap){
+            mUiHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    imageView1.setImageBitmap(bitmap);
+                }
+            });
+        }
+
+        private void setSatueiButtonEnable(final boolean bool){
+            mUiHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    buttonSatuei.setEnabled(bool);
+                }
+            });
+        }
+
     }
 }
