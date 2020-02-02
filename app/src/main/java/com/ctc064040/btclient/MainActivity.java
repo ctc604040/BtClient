@@ -55,6 +55,11 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        setScreenMain();
+    }
+
+    private void setScreenMain() {
         setContentView(R.layout.activity_main);
 
         textView_Status = findViewById(R.id.textView_Status);
@@ -90,6 +95,12 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         listView.setOnItemClickListener(this);
 
         imageView1 = findViewById(R.id.imageView1);
+        imageView1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+            }
+        });
 
         // Get a set of currently paired devices
         Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
@@ -134,10 +145,11 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                 }
             }
         });
+        bi.setEnabled(false);
 
         mUiHandler = new Handler(Looper.getMainLooper());
-
     }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         switch (requestCode) {
@@ -180,6 +192,8 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         OutputStream outputStream;
         BluetoothSocket bluetoothSocket;
 
+        Bitmap k_BMP;
+
         public void run() {
             byte[] incomingBuff = new byte[64];
             BluetoothDevice bluetoothDevice = mServerBluetoothDevice;
@@ -202,6 +216,8 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
                         inputStream = bluetoothSocket.getInputStream();
                         outputStream = bluetoothSocket.getOutputStream();
+
+                        setSatueiButtonEnable(true);
 
                         while (true) {
                             if (Thread.interrupted()) {
@@ -270,6 +286,11 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                                     outputStream.write(command.getBytes());
                                     int num = ByteBuffer.wrap(bytes).getInt();
                                     int rcvCnt = 0;
+
+                                    String infoStr = "受信中： 0 / ";
+                                    infoStr += String.valueOf(num);
+                                    setStatusTextView(infoStr);
+
                                     // サーバからJPGが送られてきたら変換して表示
                                     try {
                                         // 読み込みバッファはとりあえず200kb
@@ -278,10 +299,17 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                                             incomingBytes = inputStream.read(tmpBytes);
                                             System.arraycopy(tmpBytes, 0, bytes, rcvCnt, incomingBytes);
                                             rcvCnt += incomingBytes;
+
+                                            infoStr = "受信中：";
+                                            infoStr += String.valueOf(rcvCnt);
+                                            infoStr += " / ";
+                                            infoStr += String.valueOf(num);
+                                            setStatusTextView(infoStr);
                                         }
                                         Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, rcvCnt);
-                                        setJpgImageView(bitmap);
                                         setStatusTextView("撮影完了");
+                                        k_BMP = bitmap;
+                                        setScreenSub();
                                     } catch (Exception e) {
                                         setStatusTextView("画像取得失敗");
                                         e.printStackTrace();
@@ -306,7 +334,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             });
         }
 
-        private void setJpgImageView(final Bitmap bitmap){
+        private void setBmpImageView(final Bitmap bitmap){
             mUiHandler.post(new Runnable() {
                 @Override
                 public void run() {
@@ -324,5 +352,31 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             });
         }
 
+        private void setScreenSub() {
+            mUiHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    setContentView(R.layout.activity_preview);
+
+                    ImageView iv = findViewById(R.id.imageView);
+                    iv.setImageBitmap(k_BMP);
+                    // 横広画像の場合90度回転して表示
+                    if(k_BMP.getWidth()>k_BMP.getHeight()) {
+                        iv.setRotation(90);
+                    }
+
+                    iv.setOnClickListener(
+                            new View.OnClickListener() {
+                                public void onClick(View v) {
+                                    // メイン画面に復帰
+                                    setScreenMain();
+                                    setBmpImageView(k_BMP);
+                                    setSatueiButtonEnable(true);
+                                }
+                            });
+                }
+
+            });
+        }
     }
 }
